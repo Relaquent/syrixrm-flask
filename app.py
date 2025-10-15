@@ -1,6 +1,6 @@
 from flask import Flask, render_template_string, request, jsonify
 from flask_cors import CORS
-from openai import OpenAI
+import openai
 import os
 
 # === CONFIG ===
@@ -8,7 +8,8 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable not set")
 
-client = OpenAI(api_key=api_key)
+openai.api_key = api_key  # ✅ Yeni satır — OpenAI client'ı bu şekilde ayarla
+
 app = Flask(__name__)
 CORS(app)
 
@@ -93,11 +94,12 @@ def chat():
     syrix_memory.append({"role": "user", "content": user_message})
     conversation = [{"role": "system", "content": SYRIX_SYSTEM_PROMPT}] + syrix_memory[-10:]
 
-    response = client.chat.completions.create(
+    # ✅ openai.ChatCompletion ile yeni çağrı
+    response = openai.ChatCompletion.create(
         model="gpt-4o-mini",
         messages=conversation
     )
-    reply = response.choices[0].message.content
+    reply = response.choices[0].message["content"]
     syrix_memory.append({"role": "assistant", "content": reply})
     return jsonify({"reply": reply})
 
