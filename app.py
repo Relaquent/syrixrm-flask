@@ -13,26 +13,24 @@ if not api_key:
 client = OpenAI(api_key=api_key)
 
 app = Flask(__name__)
-app.secret_key = os.getenv("SECRET_KEY", "changeme_secret")  # Render ortamında SECRET_KEY tanımlayabilirsin
+app.secret_key = "supersecretkey"  # production'da değiştir
 CORS(app)
 bcrypt = Bcrypt(app)
 
 # === DATABASE ===
-# Render için SQLite (ephemeral)
-# Kalıcı veri istersen Render Postgres bağlantısı da eklenebilir.
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///syrixrm.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
-# === MODELS ===
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
     password = db.Column(db.String(200), nullable=False)
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
     role = db.Column(db.String(10))  # user | assistant
     content = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
@@ -47,54 +45,85 @@ Speak elegantly, give concise and intelligent answers.
 """
 
 # === HTML PAGES ===
+
 LOGIN_PAGE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>SyrixRM | Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
+* {box-sizing: border-box;}
 body {
-  background: linear-gradient(135deg, #0058ff, #4f9cff);
-  display: flex; justify-content: center; align-items: center; height: 100vh;
+  margin: 0;
+  height: 100vh;
+  background: linear-gradient(135deg, #1e3c72, #2a5298);
+  display: flex; justify-content: center; align-items: center;
   font-family: 'Inter', sans-serif;
 }
 .card {
   background: rgba(255,255,255,0.15);
   padding: 40px;
   border-radius: 20px;
-  backdrop-filter: blur(15px);
+  backdrop-filter: blur(20px);
   color: white;
   text-align: center;
-  width: 320px;
-  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  width: 360px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
   animation: fadeIn 0.8s ease;
 }
-@keyframes fadeIn {from {opacity: 0; transform: translateY(20px);} to {opacity: 1; transform: translateY(0);}}
+.card h2 {
+  font-size: 28px;
+  margin-bottom: 20px;
+}
 input {
   width: 100%; padding: 12px; margin: 10px 0;
   border: none; border-radius: 10px;
-  background: rgba(255,255,255,0.2); color: white;
+  background: rgba(255,255,255,0.2);
+  color: white; font-size: 14px;
 }
+input::placeholder {color: rgba(255,255,255,0.7);}
 button {
   width: 100%; padding: 12px;
-  background: white; color: #0058ff;
+  background: white; color: #1e3c72;
   font-weight: 600; border: none; border-radius: 10px;
-  cursor: pointer;
+  cursor: pointer; transition: background 0.3s;
 }
-a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
+button:hover {
+  background: #e0e0e0;
+}
+a {
+  color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;
+  text-decoration: none; opacity: 0.8;
+}
+a:hover {opacity: 1;}
+.guest-btn {
+  margin-top: 15px;
+  background: transparent;
+  color: white;
+  border: 1px solid white;
+  transition: all 0.3s;
+}
+.guest-btn:hover {
+  background: rgba(255,255,255,0.2);
+}
+@keyframes fadeIn {from {opacity: 0; transform: translateY(20px);} to {opacity: 1; transform: translateY(0);}}
 </style>
 </head>
 <body>
 <div class="card">
-  <h2>SyrixRM</h2>
+  <h2>Welcome to SyrixRM</h2>
   <form method="POST" action="/login">
-    <input name="username" placeholder="Username" required>
+    <input name="email" placeholder="Email" required>
     <input name="password" type="password" placeholder="Password" required>
     <button type="submit">Login</button>
   </form>
   <a href="/register">Create account</a>
+  <form action="/guest" method="POST">
+    <button class="guest-btn" type="submit">Continue as Guest</button>
+  </form>
 </div>
 </body>
 </html>
@@ -102,26 +131,29 @@ a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
 
 REGISTER_PAGE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>SyrixRM | Register</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-body {background: linear-gradient(135deg, #0058ff, #4f9cff); display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif;}
-.card {background: rgba(255,255,255,0.15); padding: 40px; border-radius: 20px; backdrop-filter: blur(15px); color: white; text-align: center; width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);}
+body {background: linear-gradient(135deg, #1e3c72, #2a5298); display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif; margin:0;}
+.card {background: rgba(255,255,255,0.15); padding: 40px; border-radius: 20px; backdrop-filter: blur(20px); color: white; text-align: center; width: 360px; box-shadow: 0 10px 40px rgba(0,0,0,0.25);}
 input {width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 10px; background: rgba(255,255,255,0.2); color: white;}
-button {width: 100%; padding: 12px; background: white; color: #0058ff; font-weight: 600; border: none; border-radius: 10px; cursor: pointer;}
+button {width: 100%; padding: 12px; background: white; color: #1e3c72; font-weight: 600; border: none; border-radius: 10px; cursor: pointer;}
+button:hover {background: #e0e0e0;}
 a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
 </style>
 </head>
 <body>
 <div class="card">
-  <h2>Register</h2>
+  <h2>Create Account</h2>
   <form method="POST" action="/register">
     <input name="username" placeholder="Username" required>
+    <input name="email" placeholder="Email" required>
     <input name="password" type="password" placeholder="Password" required>
-    <button type="submit">Create Account</button>
+    <button type="submit">Register</button>
   </form>
   <a href="/login">Back to login</a>
 </div>
@@ -131,15 +163,16 @@ a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
 
 CHAT_PAGE = """
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
 <title>SyrixRM</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root { --accent: #0058ff; --bg: #eef2f9; --chat-bg: rgba(255,255,255,0.6); }
-body { background: var(--bg); font-family: 'Inter', sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; }
-header { display: flex; justify-content: space-between; align-items: center; padding: 16px 40px; background: rgba(255,255,255,0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);}
+:root {--accent: #0058ff; --bg: #eef2f9; --chat-bg: rgba(255,255,255,0.6);}
+body {background: var(--bg); font-family: 'Inter', sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0;}
+header {display: flex; justify-content: space-between; align-items: center; padding: 16px 40px; background: rgba(255,255,255,0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);}
 .chat-container {flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px;}
 .chat-box {width: 75%; max-width: 900px; height: 80vh; background: var(--chat-bg); border-radius: 20px; display: flex; flex-direction: column; backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(0,0,0,0.1);}
 .messages {flex: 1; padding: 20px; overflow-y: auto;}
@@ -148,7 +181,7 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 .msg.ai {align-self: flex-start; background: white; color:#222;}
 .input-area {display: flex; padding: 12px; border-top: 1px solid rgba(0,0,0,0.05);}
 .input-area input {flex: 1; padding: 10px; border: none; border-radius: 10px; outline: none;}
-.input-area button {margin-left: 10px; padding: 10px 18px; background: var(--accent); color: white; border: none; border-radius: 10px;}
+.input-area button {margin-left: 10px; padding: 10px 18px; background: var(--accent); color: white; border: none; border-radius: 10px; cursor:pointer;}
 @keyframes fadeIn {from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);}}
 </style>
 </head>
@@ -156,8 +189,12 @@ header { display: flex; justify-content: space-between; align-items: center; pad
 <header>
   <h2>SyrixRM</h2>
   <div>
-    <span style="margin-right:10px;">👤 {{username}}</span>
-    <a href="/logout" style="text-decoration:none; color:#0058ff;">Logout</a>
+    {% if username %}
+      <span style="margin-right:10px;">👤 {{username}}</span>
+      <a href="/logout" style="text-decoration:none; color:#0058ff;">Logout</a>
+    {% else %}
+      <a href="/login" style="text-decoration:none; color:#0058ff;">Login</a>
+    {% endif %}
   </div>
 </header>
 <div class="chat-container">
@@ -199,20 +236,25 @@ loadHistory();
 """
 
 # === ROUTES ===
+
 @app.route("/")
 def root():
-    if "user_id" not in session:
-        return redirect(url_for('login'))
     return render_template_string(CHAT_PAGE, username=session.get("username"))
+
+@app.route("/guest", methods=["POST"])
+def guest():
+    session.clear()
+    return redirect(url_for('root'))
 
 @app.route("/register", methods=["GET", "POST"])
 def register():
     if request.method == "POST":
         username = request.form["username"]
+        email = request.form["email"]
         password = bcrypt.generate_password_hash(request.form["password"]).decode("utf-8")
-        if User.query.filter_by(username=username).first():
-            return "Username already taken."
-        user = User(username=username, password=password)
+        if User.query.filter((User.username == username) | (User.email == email)).first():
+            return "Username or Email already taken."
+        user = User(username=username, email=email, password=password)
         db.session.add(user)
         db.session.commit()
         return redirect(url_for('login'))
@@ -221,9 +263,9 @@ def register():
 @app.route("/login", methods=["GET", "POST"])
 def login():
     if request.method == "POST":
-        username = request.form["username"]
+        email = request.form["email"]
         password = request.form["password"]
-        user = User.query.filter_by(username=username).first()
+        user = User.query.filter_by(email=email).first()
         if user and bcrypt.check_password_hash(user.password, password):
             session["user_id"] = user.id
             session["username"] = user.username
@@ -238,35 +280,34 @@ def logout():
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    if "user_id" not in session:
-        return jsonify({"error": "Unauthorized"}), 401
-    user_id = session["user_id"]
+    user_id = session.get("user_id")
     msg = request.json.get("message", "")
 
     history = [{"role": "system", "content": SYSTEM_PROMPT}]
-    messages = Message.query.filter_by(user_id=user_id).order_by(Message.id.desc()).limit(10).all()
-    for m in reversed(messages):
-        history.append({"role": m.role, "content": m.content})
+    if user_id:
+        messages = Message.query.filter_by(user_id=user_id).order_by(Message.id.desc()).limit(10).all()
+        for m in reversed(messages):
+            history.append({"role": m.role, "content": m.content})
     history.append({"role": "user", "content": msg})
 
     response = client.chat.completions.create(model="gpt-4o-mini", messages=history)
     reply = response.choices[0].message.content
 
-    db.session.add(Message(user_id=user_id, role="user", content=msg))
-    db.session.add(Message(user_id=user_id, role="assistant", content=reply))
-    db.session.commit()
+    if user_id:
+        db.session.add(Message(user_id=user_id, role="user", content=msg))
+        db.session.add(Message(user_id=user_id, role="assistant", content=reply))
+        db.session.commit()
 
     return jsonify({"reply": reply})
 
 @app.route("/history")
 def history():
-    if "user_id" not in session:
+    user_id = session.get("user_id")
+    if not user_id:
         return jsonify([])
-    user_id = session["user_id"]
     messages = Message.query.filter_by(user_id=user_id).order_by(Message.id).all()
     return jsonify([{"role": m.role, "content": m.content} for m in messages])
 
-# === RENDER START ===
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
