@@ -6,22 +6,22 @@ from openai import OpenAI
 import os
 from datetime import datetime
 
-# === ENV ===
+# === CONFIG ===
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
     raise ValueError("OPENAI_API_KEY environment variable missing.")
 client = OpenAI(api_key=api_key)
 
 app = Flask(__name__)
-app.secret_key = "supersecretkey"  # production'da değiştir
+app.secret_key = "supersecretkey"
 CORS(app)
 bcrypt = Bcrypt(app)
 
-# === DATABASE ===
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///syrixrm.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db = SQLAlchemy(app)
 
+# === MODELS ===
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
@@ -31,18 +31,14 @@ class User(db.Model):
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
-    role = db.Column(db.String(10))  # user | assistant
+    role = db.Column(db.String(10))
     content = db.Column(db.Text)
     timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
 with app.app_context():
     db.create_all()
 
-# === SYSTEM PROMPT ===
-SYSTEM_PROMPT = """
-You are SyrixRM, a refined AI assistant created by Relaquent.
-Speak elegantly, give concise and intelligent answers.
-"""
+SYSTEM_PROMPT = "You are SyrixRM, an intelligent, elegant and concise AI assistant."
 
 # === LOGIN PAGE ===
 LOGIN_PAGE = """
@@ -52,18 +48,20 @@ LOGIN_PAGE = """
 <meta charset="UTF-8">
 <title>SyrixRM | Login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;}
 body{
   margin:0;height:100vh;display:flex;justify-content:center;align-items:center;
   background:linear-gradient(135deg,#f8f9fc,#eaeef7);
   font-family:'Inter',sans-serif;
 }
 .card{
-  background:rgba(255,255,255,0.75);backdrop-filter:blur(25px);
-  padding:40px;border-radius:20px;box-shadow:0 10px 40px rgba(0,0,0,0.08);
-  width:360px;text-align:center;animation:fadeIn 0.8s ease;
+  background:rgba(255,255,255,0.75);
+  backdrop-filter:blur(25px);
+  padding:40px;border-radius:20px;
+  box-shadow:0 10px 40px rgba(0,0,0,0.08);
+  width:360px;text-align:center;
+  animation:fadeIn 0.8s ease;
 }
 h2{
   font-size:28px;font-weight:700;
@@ -79,14 +77,13 @@ input{
 }
 input:focus{box-shadow:0 0 0 3px rgba(0,88,255,0.3);}
 button{
-  width:100%;padding:14px;background:linear-gradient(135deg,#0058ff,#5791ff);
+  width:100%;padding:14px;
+  background:linear-gradient(135deg,#0058ff,#5791ff);
   color:white;font-weight:600;border:none;border-radius:12px;
   cursor:pointer;transition:transform 0.2s;
 }
 button:hover{transform:scale(1.02);}
-a{
-  color:#1d1d1f;font-size:14px;margin-top:15px;display:inline-block;text-decoration:none;opacity:0.7;
-}
+a{color:#1d1d1f;font-size:14px;margin-top:15px;display:inline-block;opacity:0.7;text-decoration:none;}
 a:hover{opacity:1;}
 .guest-btn{
   margin-top:15px;background:transparent;color:#1d1d1f;border:1px solid rgba(0,0,0,0.1);
@@ -120,7 +117,7 @@ REGISTER_PAGE = """
 <meta charset="UTF-8">
 <title>SyrixRM | Register</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
 body{background:linear-gradient(135deg,#f8f9fc,#eaeef7);display:flex;justify-content:center;align-items:center;height:100vh;font-family:'Inter',sans-serif;margin:0;}
 .card{background:rgba(255,255,255,0.75);padding:40px;border-radius:20px;backdrop-filter:blur(25px);width:360px;box-shadow:0 10px 40px rgba(0,0,0,0.08);}
@@ -146,7 +143,7 @@ a{color:#1d1d1f;font-size:14px;margin-top:15px;display:inline-block;}
 </html>
 """
 
-# === CHAT PAGE (MODERN PREMIUM UI - ChatGPT Style) ===
+# === CHAT PAGE ===
 CHAT_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -156,27 +153,84 @@ CHAT_PAGE = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root {--accent:#0058ff;--bg:#f8f9fc;--chat-bg:#ffffff;}
-body {background:var(--bg);font-family:'Inter',sans-serif;display:flex;flex-direction:column;height:100vh;margin:0;}
-header {display:flex;justify-content:space-between;align-items:center;padding:20px 40px;background:rgba(255,255,255,0.8);backdrop-filter:blur(15px);box-shadow:0 4px 25px rgba(0,0,0,0.05);position:sticky;top:0;z-index:10;}
-header h2 {background:linear-gradient(90deg,#1d1d1f,#5b5b5f);-webkit-background-clip:text;-webkit-text-fill-color:transparent;font-size:24px;}
+:root {
+  --accent:#0058ff;
+  --bg:#f8f9fc;
+}
+body {
+  background:var(--bg);
+  font-family:'Inter',sans-serif;
+  display:flex;flex-direction:column;
+  height:100vh;
+  margin:0;
+}
+#intro-screen {
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  background:linear-gradient(135deg,#f8f9fc,#eaeef7);
+  display:flex;align-items:center;justify-content:center;
+  z-index:999;
+  animation:introFade 1.8s ease forwards 2s;
+}
+#intro-logo {
+  font-size:48px;font-weight:800;
+  background:linear-gradient(90deg,#0058ff,#3f7af0);
+  -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;
+  opacity:0;transform:scale(0.8);
+  animation:logoIn 1.2s ease forwards;
+}
+header {
+  display:flex;justify-content:space-between;align-items:center;
+  padding:20px 40px;
+  background:rgba(255,255,255,0.8);
+  backdrop-filter:blur(15px);
+  box-shadow:0 4px 25px rgba(0,0,0,0.05);
+  position:sticky;top:0;z-index:10;
+}
+header h2 {
+  background:linear-gradient(90deg,#1d1d1f,#5b5b5f);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  font-size:24px;
+}
 .chat-container {flex:1;display:flex;justify-content:center;padding:20px;overflow-y:auto;}
 .chat-box {width:100%;max-width:800px;display:flex;flex-direction:column;}
 .messages {flex:1;padding:20px;overflow-y:auto;scroll-behavior:smooth;}
 .msg {display:flex;align-items:flex-start;margin-bottom:18px;animation:fadeIn 0.3s ease;}
-.msg .bubble {max-width:75%;padding:14px 18px;border-radius:18px;line-height:1.5;font-size:15px;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
+.msg .bubble {
+  max-width:75%;padding:14px 18px;border-radius:18px;
+  line-height:1.5;font-size:15px;box-shadow:0 2px 6px rgba(0,0,0,0.05);
+}
 .msg.user {flex-direction:row-reverse;}
 .msg.user .bubble {background:linear-gradient(120deg,#0058ff,#599bff);color:white;border-bottom-right-radius:4px;}
 .msg.ai .bubble {background:white;color:#222;border-bottom-left-radius:4px;}
 .avatar {width:36px;height:36px;border-radius:50%;background:#e0e6f7;display:flex;align-items:center;justify-content:center;font-weight:600;margin:0 10px;}
-.input-area {display:flex;padding:16px;position:sticky;bottom:0;background:rgba(255,255,255,0.9);backdrop-filter:blur(10px);box-shadow:0 -4px 25px rgba(0,0,0,0.05);}
-.input-area input {flex:1;padding:14px;border:none;border-radius:14px;outline:none;background:white;box-shadow:0 2px 6px rgba(0,0,0,0.05);}
-.input-area button {margin-left:10px;padding:14px 20px;background:var(--accent);color:white;border:none;border-radius:14px;cursor:pointer;font-weight:600;transition:0.2s;}
+.input-area {
+  display:flex;padding:16px;position:sticky;bottom:0;
+  background:rgba(255,255,255,0.9);
+  backdrop-filter:blur(10px);
+  box-shadow:0 -4px 25px rgba(0,0,0,0.05);
+}
+.input-area input {
+  flex:1;padding:14px;border:none;border-radius:14px;
+  outline:none;background:white;
+  box-shadow:0 2px 6px rgba(0,0,0,0.05);
+}
+.input-area button {
+  margin-left:10px;padding:14px 20px;
+  background:var(--accent);color:white;
+  border:none;border-radius:14px;
+  cursor:pointer;font-weight:600;transition:0.2s;
+}
 .input-area button:hover {background:#0048d1;}
 @keyframes fadeIn {from {opacity:0; transform:translateY(10px);} to {opacity:1; transform:translateY(0);}}
+@keyframes introFade {to {opacity:0;visibility:hidden;}}
+@keyframes logoIn {to {opacity:1;transform:scale(1);}}
 </style>
 </head>
 <body>
+<div id="intro-screen">
+  <div id="intro-logo">SyrixRM</div>
+</div>
 <header>
   <h2>SyrixRM</h2>
   <div>
@@ -303,5 +357,4 @@ def history():
     return jsonify([{"role": m.role, "content": m.content} for m in messages])
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+    app.run(host="0.0.0.0", port=5000)
