@@ -44,7 +44,7 @@ You are SyrixRM, a refined AI assistant created by Relaquent.
 Speak elegantly, give concise and intelligent answers.
 """
 
-# === HTML PAGES ===
+# === LOGIN PAGE (PREMIUM UI) ===
 
 LOGIN_PAGE = """
 <!DOCTYPE html>
@@ -53,68 +53,82 @@ LOGIN_PAGE = """
 <meta charset="UTF-8">
 <title>SyrixRM | Login</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
 * {box-sizing: border-box;}
 body {
   margin: 0;
   height: 100vh;
-  background: linear-gradient(135deg, #1e3c72, #2a5298);
+  background: linear-gradient(135deg, #f8f9fc, #eaeef7);
   display: flex; justify-content: center; align-items: center;
   font-family: 'Inter', sans-serif;
 }
 .card {
-  background: rgba(255,255,255,0.15);
+  background: rgba(255,255,255,0.7);
   padding: 40px;
-  border-radius: 20px;
-  backdrop-filter: blur(20px);
-  color: white;
+  border-radius: 24px;
+  backdrop-filter: blur(25px);
+  color: #1d1d1f;
   text-align: center;
-  width: 360px;
-  box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  width: 380px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.08);
   animation: fadeIn 0.8s ease;
+  transition: all 0.4s;
 }
-.card h2 {
+.card:hover {
+  transform: scale(1.02);
+}
+h2 {
   font-size: 28px;
-  margin-bottom: 20px;
+  font-weight: 700;
+  margin-bottom: 25px;
+  background: linear-gradient(90deg,#1d1d1f,#5b5b5f);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 input {
-  width: 100%; padding: 12px; margin: 10px 0;
-  border: none; border-radius: 10px;
-  background: rgba(255,255,255,0.2);
-  color: white; font-size: 14px;
+  width: 100%; padding: 14px; margin: 10px 0;
+  border: none; border-radius: 12px;
+  background: rgba(255,255,255,0.8);
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+  color: #1d1d1f; font-size: 14px;
+  outline: none;
 }
-input::placeholder {color: rgba(255,255,255,0.7);}
+input:focus {
+  box-shadow: 0 0 0 3px rgba(0,88,255,0.3);
+}
 button {
-  width: 100%; padding: 12px;
-  background: white; color: #1e3c72;
-  font-weight: 600; border: none; border-radius: 10px;
-  cursor: pointer; transition: background 0.3s;
+  width: 100%; padding: 14px;
+  background: linear-gradient(135deg,#0058ff,#5791ff);
+  color: white;
+  font-weight: 600; border: none; border-radius: 12px;
+  cursor: pointer; transition: background 0.3s, transform 0.2s;
+  margin-top: 10px;
 }
 button:hover {
-  background: #e0e0e0;
+  transform: scale(1.02);
 }
 a {
-  color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;
-  text-decoration: none; opacity: 0.8;
+  color: #1d1d1f; font-size: 14px; display: inline-block; margin-top: 15px;
+  text-decoration: none; opacity: 0.7;
 }
 a:hover {opacity: 1;}
 .guest-btn {
   margin-top: 15px;
   background: transparent;
-  color: white;
-  border: 1px solid white;
+  color: #1d1d1f;
+  border: 1px solid rgba(0,0,0,0.1);
   transition: all 0.3s;
 }
 .guest-btn:hover {
-  background: rgba(255,255,255,0.2);
+  background: rgba(0,0,0,0.05);
 }
 @keyframes fadeIn {from {opacity: 0; transform: translateY(20px);} to {opacity: 1; transform: translateY(0);}}
 </style>
 </head>
 <body>
 <div class="card">
-  <h2>Welcome to SyrixRM</h2>
+  <h2>SyrixRM</h2>
   <form method="POST" action="/login">
     <input name="email" placeholder="Email" required>
     <input name="password" type="password" placeholder="Password" required>
@@ -129,6 +143,8 @@ a:hover {opacity: 1;}
 </html>
 """
 
+# === REGISTER PAGE ===
+
 REGISTER_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -136,14 +152,14 @@ REGISTER_PAGE = """
 <meta charset="UTF-8">
 <title>SyrixRM | Register</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-body {background: linear-gradient(135deg, #1e3c72, #2a5298); display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif; margin:0;}
-.card {background: rgba(255,255,255,0.15); padding: 40px; border-radius: 20px; backdrop-filter: blur(20px); color: white; text-align: center; width: 360px; box-shadow: 0 10px 40px rgba(0,0,0,0.25);}
-input {width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 10px; background: rgba(255,255,255,0.2); color: white;}
-button {width: 100%; padding: 12px; background: white; color: #1e3c72; font-weight: 600; border: none; border-radius: 10px; cursor: pointer;}
-button:hover {background: #e0e0e0;}
-a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
+body {background: linear-gradient(135deg, #f8f9fc, #eaeef7); display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif; margin:0;}
+.card {background: rgba(255,255,255,0.7); padding: 40px; border-radius: 24px; backdrop-filter: blur(25px); color: #1d1d1f; text-align: center; width: 380px; box-shadow: 0 10px 40px rgba(0,0,0,0.08);}
+input {width: 100%; padding: 14px; margin: 10px 0; border: none; border-radius: 12px; background: rgba(255,255,255,0.8); box-shadow: 0 2px 6px rgba(0,0,0,0.05); color: #1d1d1f;}
+button {width: 100%; padding: 14px; background: linear-gradient(135deg,#0058ff,#5791ff); color: white; font-weight: 600; border: none; border-radius: 12px; cursor: pointer; margin-top: 10px;}
+button:hover {transform: scale(1.02);}
+a {color: #1d1d1f; font-size: 14px; display: inline-block; margin-top: 15px;}
 </style>
 </head>
 <body>
@@ -161,6 +177,8 @@ a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
 </html>
 """
 
+# === CHAT PAGE (PREMIUM UI) ===
+
 CHAT_PAGE = """
 <!DOCTYPE html>
 <html lang="en">
@@ -170,18 +188,20 @@ CHAT_PAGE = """
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-:root {--accent: #0058ff; --bg: #eef2f9; --chat-bg: rgba(255,255,255,0.6);}
+:root {--accent: #0058ff; --bg: #f8f9fc; --chat-bg: rgba(255,255,255,0.6);}
 body {background: var(--bg); font-family: 'Inter', sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0;}
-header {display: flex; justify-content: space-between; align-items: center; padding: 16px 40px; background: rgba(255,255,255,0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);}
+header {display: flex; justify-content: space-between; align-items: center; padding: 20px 40px; background: rgba(255,255,255,0.7); backdrop-filter: blur(15px); box-shadow: 0 4px 25px rgba(0,0,0,0.05);}
+header h2 {background: linear-gradient(90deg,#1d1d1f,#5b5b5f); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-size: 24px;}
 .chat-container {flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px;}
-.chat-box {width: 75%; max-width: 900px; height: 80vh; background: var(--chat-bg); border-radius: 20px; display: flex; flex-direction: column; backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(0,0,0,0.1);}
-.messages {flex: 1; padding: 20px; overflow-y: auto;}
-.msg {max-width: 70%; padding: 12px 16px; border-radius: 16px; margin: 6px 0; line-height: 1.5; animation: fadeIn 0.3s ease;}
-.msg.user {align-self: flex-end; background: linear-gradient(120deg,#dfe9ff,#b9d4ff); color:#00358c;}
-.msg.ai {align-self: flex-start; background: white; color:#222;}
-.input-area {display: flex; padding: 12px; border-top: 1px solid rgba(0,0,0,0.05);}
-.input-area input {flex: 1; padding: 10px; border: none; border-radius: 10px; outline: none;}
-.input-area button {margin-left: 10px; padding: 10px 18px; background: var(--accent); color: white; border: none; border-radius: 10px; cursor:pointer;}
+.chat-box {width: 75%; max-width: 900px; height: 80vh; background: var(--chat-bg); border-radius: 24px; display: flex; flex-direction: column; backdrop-filter: blur(25px); box-shadow: 0 10px 40px rgba(0,0,0,0.08);}
+.messages {flex: 1; padding: 20px; overflow-y: auto; scroll-behavior: smooth;}
+.msg {max-width: 70%; padding: 14px 18px; border-radius: 18px; margin: 8px 0; line-height: 1.5; animation: fadeIn 0.3s ease; font-size: 15px;}
+.msg.user {align-self: flex-end; background: linear-gradient(120deg,#0058ff,#599bff); color:white;}
+.msg.ai {align-self: flex-start; background: white; color:#222; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}
+.input-area {display: flex; padding: 16px; border-top: 1px solid rgba(0,0,0,0.05);}
+.input-area input {flex: 1; padding: 14px; border: none; border-radius: 14px; outline: none; background: white; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}
+.input-area button {margin-left: 10px; padding: 14px 20px; background: var(--accent); color: white; border: none; border-radius: 14px; cursor:pointer; font-weight: 600;}
+.input-area button:hover {background: #0048d1;}
 @keyframes fadeIn {from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);}}
 </style>
 </head>
