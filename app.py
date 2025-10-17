@@ -1,200 +1,272 @@
-from flask import Flask, render_template_string, request, jsonify
+from flask import Flask, render_template_string, request, jsonify, session, redirect, url_for
 from flask_cors import CORS
+from flask_bcrypt import Bcrypt
+from flask_sqlalchemy import SQLAlchemy
 from openai import OpenAI
 import os
+from datetime import datetime
 
-# === ENV SETUP ===
+# === ENV ===
 api_key = os.getenv("OPENAI_API_KEY")
 if not api_key:
-    raise ValueError("OPENAI_API_KEY not found in environment variables")
-
+    raise ValueError("OPENAI_API_KEY environment variable missing.")
 client = OpenAI(api_key=api_key)
-app = Flask(__name__)
-CORS(app)
 
-# === SyrixRM MEMORY ===
-syrix_memory = []
-SYRIX_SYSTEM_PROMPT = """
-You are SyrixRM, an advanced conversational AI developed by Relaquent.
-You are elegant, intelligent, and speak in a refined yet friendly tone.
-Keep your responses insightful, concise, and premium in style.
+app = Flask(__name__)
+app.secret_key = os.getenv("SECRET_KEY", "changeme_secret")  # Render ortamında SECRET_KEY tanımlayabilirsin
+CORS(app)
+bcrypt = Bcrypt(app)
+
+# === DATABASE ===
+# Render için SQLite (ephemeral)
+# Kalıcı veri istersen Render Postgres bağlantısı da eklenebilir.
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///syrixrm.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+# === MODELS ===
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(50), unique=True, nullable=False)
+    password = db.Column(db.String(200), nullable=False)
+
+class Message(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'))
+    role = db.Column(db.String(10))  # user | assistant
+    content = db.Column(db.Text)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
+
+with app.app_context():
+    db.create_all()
+
+# === SYSTEM PROMPT ===
+SYSTEM_PROMPT = """
+You are SyrixRM, a refined AI assistant created by Relaquent.
+Speak elegantly, give concise and intelligent answers.
 """
 
-# === FRONTEND HTML ===
-HTML_PAGE = """
+# === HTML PAGES ===
+LOGIN_PAGE = """
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
 <meta charset="UTF-8">
-<title>SyrixRM | Relaquent</title>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<title>SyrixRM | Login</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <style>
-/* === CSS aynı senin kodun === */
-:root {
-  --accent: #0058ff;
-  --accent-light: #4f9cff;
-  --bg: #eef2f9;
-  --text: #1a1a1a;
-  --muted: #707070;
-  --chat-bg: rgba(255,255,255,0.7);
+body {
+  background: linear-gradient(135deg, #0058ff, #4f9cff);
+  display: flex; justify-content: center; align-items: center; height: 100vh;
+  font-family: 'Inter', sans-serif;
 }
-* {margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif;}
-body {background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden;}
-body::before {content: ''; position: fixed; width: 100%; height: 100%;
-background: radial-gradient(circle at 30% 30%, rgba(0,88,255,0.08), transparent 60%),
-            radial-gradient(circle at 70% 70%, rgba(79,156,255,0.08), transparent 60%);
-z-index: -1; animation: floatBackground 12s ease-in-out infinite alternate;}
-@keyframes floatBackground {from {transform: scale(1) translateY(0);} to {transform: scale(1.05) translateY(-20px);}}
-#intro {position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; justify-content: center; align-items: center; background: rgba(255,255,255,0.8); backdrop-filter: blur(20px); z-index: 50; animation: introFade 3.2s ease forwards;}
-#intro-content {text-align: center; animation: logoFade 2.8s ease-in-out forwards;}
-#intro h1 {font-size: 46px; font-weight: 700; background: linear-gradient(90deg, var(--accent), var(--accent-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent;}
-#intro p {font-size: 15px; color: var(--muted); letter-spacing: 1px;}
-@keyframes logoFade {0% {opacity: 0; transform: scale(0.9);} 25% {opacity: 1; transform: scale(1);} 80% {opacity: 1;} 100% {opacity: 0; transform: scale(1.05);}}
-@keyframes introFade {0% {opacity: 1;} 85% {opacity: 1;} 100% {opacity: 0; visibility: hidden;}}
-header {display: flex; justify-content: space-between; align-items: center; padding: 28px 60px; background: rgba(255,255,255,0.45); backdrop-filter: blur(20px); box-shadow: 0 8px 30px rgba(0,0,0,0.06); position: sticky; top: 0; z-index: 10;}
-.logo h1 {font-weight: 700; font-size: 28px; background: linear-gradient(90deg, var(--accent), var(--accent-light)); -webkit-background-clip: text; -webkit-text-fill-color: transparent; margin-bottom: 3px;}
-.logo p {font-size: 13px; color: var(--muted); font-style: italic;}
-nav {display: flex; gap: 24px;}
-nav button {background: none; border: none; font-weight: 500; font-size: 15px; cursor: pointer; color: var(--text); transition: 0.3s; position: relative;}
-nav button::after {content: ''; position: absolute; bottom: -2px; left: 0; width: 0%; height: 2px; background: var(--accent); transition: width 0.3s ease;}
-nav button:hover {color: var(--accent);}
-nav button:hover::after {width: 100%;}
-main {flex: 1; display: flex; justify-content: center; align-items: center; padding: 40px; opacity: 0; animation: mainFade 3.2s ease forwards; animation-delay: 2.5s;}
-@keyframes mainFade {to {opacity: 1;}}
-.chat-container {width: 75%; max-width: 900px; height: 80vh; background: var(--chat-bg); border-radius: 24px; box-shadow: 0 15px 45px rgba(0,0,0,0.12); backdrop-filter: blur(22px); display: flex; flex-direction: column; overflow: hidden;}
-.chat-header {padding: 16px 24px; border-bottom: 1px solid rgba(255,255,255,0.3); font-weight: 600; font-size: 16px; background: linear-gradient(90deg, rgba(255,255,255,0.3), rgba(255,255,255,0.1)); text-shadow: 0 0 10px rgba(255,255,255,0.3);}
-.chat-box {flex: 1; padding: 20px 28px; overflow-y: auto; display: flex; flex-direction: column; scroll-behavior: smooth;}
-.msg {max-width: 75%; padding: 14px 18px; border-radius: 18px; margin: 8px 0; line-height: 1.6; font-size: 15px;}
-.user {align-self: flex-end; background: linear-gradient(120deg, #dfe9ff, #b9d4ff); color: #00358c;}
-.ai {align-self: flex-start; background: rgba(255,255,255,0.65); color: #202020;}
-#typing {display: none; font-size: 13px; color: var(--muted); margin: 6px 0; text-align: left;}
-.input-area {display: flex; border-top: 1px solid rgba(255,255,255,0.3); padding: 14px; background: rgba(255,255,255,0.4); backdrop-filter: blur(10px);}
-.input-area input {flex: 1; border: none; outline: none; padding: 12px 16px; border-radius: 10px; background: rgba(255,255,255,0.8); font-size: 15px;}
-.input-area button {margin-left: 10px; border: none; border-radius: 10px; padding: 12px 22px; font-weight: 600; background: linear-gradient(90deg,var(--accent),var(--accent-light)); color: white; cursor: pointer;}
-footer {text-align: center; padding: 18px; font-size: 14px; color: var(--muted); background: rgba(255,255,255,0.6);}
-.modal {display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); justify-content: center; align-items: center; z-index: 20;}
-.modal-content {background: white; width: 420px; padding: 28px; border-radius: 18px; text-align: center;}
+.card {
+  background: rgba(255,255,255,0.15);
+  padding: 40px;
+  border-radius: 20px;
+  backdrop-filter: blur(15px);
+  color: white;
+  text-align: center;
+  width: 320px;
+  box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+  animation: fadeIn 0.8s ease;
+}
+@keyframes fadeIn {from {opacity: 0; transform: translateY(20px);} to {opacity: 1; transform: translateY(0);}}
+input {
+  width: 100%; padding: 12px; margin: 10px 0;
+  border: none; border-radius: 10px;
+  background: rgba(255,255,255,0.2); color: white;
+}
+button {
+  width: 100%; padding: 12px;
+  background: white; color: #0058ff;
+  font-weight: 600; border: none; border-radius: 10px;
+  cursor: pointer;
+}
+a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
 </style>
 </head>
 <body>
+<div class="card">
+  <h2>SyrixRM</h2>
+  <form method="POST" action="/login">
+    <input name="username" placeholder="Username" required>
+    <input name="password" type="password" placeholder="Password" required>
+    <button type="submit">Login</button>
+  </form>
+  <a href="/register">Create account</a>
+</div>
+</body>
+</html>
+"""
 
-<div id="intro"><div id="intro-content"><h1>SyrixRM</h1><p>by Relaquent</p></div></div>
+REGISTER_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SyrixRM | Register</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+body {background: linear-gradient(135deg, #0058ff, #4f9cff); display: flex; justify-content: center; align-items: center; height: 100vh; font-family: 'Inter', sans-serif;}
+.card {background: rgba(255,255,255,0.15); padding: 40px; border-radius: 20px; backdrop-filter: blur(15px); color: white; text-align: center; width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);}
+input {width: 100%; padding: 12px; margin: 10px 0; border: none; border-radius: 10px; background: rgba(255,255,255,0.2); color: white;}
+button {width: 100%; padding: 12px; background: white; color: #0058ff; font-weight: 600; border: none; border-radius: 10px; cursor: pointer;}
+a {color: #fff; font-size: 14px; display: inline-block; margin-top: 10px;}
+</style>
+</head>
+<body>
+<div class="card">
+  <h2>Register</h2>
+  <form method="POST" action="/register">
+    <input name="username" placeholder="Username" required>
+    <input name="password" type="password" placeholder="Password" required>
+    <button type="submit">Create Account</button>
+  </form>
+  <a href="/login">Back to login</a>
+</div>
+</body>
+</html>
+"""
 
+CHAT_PAGE = """
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>SyrixRM</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+<style>
+:root { --accent: #0058ff; --bg: #eef2f9; --chat-bg: rgba(255,255,255,0.6); }
+body { background: var(--bg); font-family: 'Inter', sans-serif; display: flex; flex-direction: column; height: 100vh; margin: 0; }
+header { display: flex; justify-content: space-between; align-items: center; padding: 16px 40px; background: rgba(255,255,255,0.6); backdrop-filter: blur(10px); box-shadow: 0 4px 15px rgba(0,0,0,0.1);}
+.chat-container {flex: 1; display: flex; justify-content: center; align-items: center; padding: 20px;}
+.chat-box {width: 75%; max-width: 900px; height: 80vh; background: var(--chat-bg); border-radius: 20px; display: flex; flex-direction: column; backdrop-filter: blur(15px); box-shadow: 0 10px 40px rgba(0,0,0,0.1);}
+.messages {flex: 1; padding: 20px; overflow-y: auto;}
+.msg {max-width: 70%; padding: 12px 16px; border-radius: 16px; margin: 6px 0; line-height: 1.5; animation: fadeIn 0.3s ease;}
+.msg.user {align-self: flex-end; background: linear-gradient(120deg,#dfe9ff,#b9d4ff); color:#00358c;}
+.msg.ai {align-self: flex-start; background: white; color:#222;}
+.input-area {display: flex; padding: 12px; border-top: 1px solid rgba(0,0,0,0.05);}
+.input-area input {flex: 1; padding: 10px; border: none; border-radius: 10px; outline: none;}
+.input-area button {margin-left: 10px; padding: 10px 18px; background: var(--accent); color: white; border: none; border-radius: 10px;}
+@keyframes fadeIn {from {opacity:0; transform: translateY(10px);} to {opacity:1; transform: translateY(0);}}
+</style>
+</head>
+<body>
 <header>
-  <div class="logo"><h1>SyrixRM</h1><p>by Relaquent</p></div>
-  <nav>
-    <button onclick="openModal('about')">About</button>
-    <button onclick="openModal('projects')">Projects</button>
-  </nav>
+  <h2>SyrixRM</h2>
+  <div>
+    <span style="margin-right:10px;">👤 {{username}}</span>
+    <a href="/logout" style="text-decoration:none; color:#0058ff;">Logout</a>
+  </div>
 </header>
-
-<main>
-  <div class="chat-container">
-    <div class="chat-header">SyrixRM</div>
-    <div class="chat-box" id="chat-box"></div>
-    <div id="typing">SyrixRM is typing...</div>
+<div class="chat-container">
+  <div class="chat-box">
+    <div class="messages" id="messages"></div>
     <div class="input-area">
-      <input type="text" id="user-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter') sendMessage()">
+      <input type="text" id="user-input" placeholder="Type a message..." onkeydown="if(event.key==='Enter')sendMessage()">
       <button onclick="sendMessage()">Send</button>
     </div>
   </div>
-</main>
-
-<footer>© 2025 Relaquent — Built with precision and passion.</footer>
-
-<div class="modal" id="about-modal">
-  <div class="modal-content">
-    <h2>About Relaquent</h2>
-    <p>Relaquent merges creativity, intelligence, and technology to craft premium AI experiences.</p>
-    <button onclick="closeModal('about')">Close</button>
-  </div>
 </div>
-
-<div class="modal" id="projects-modal">
-  <div class="modal-content">
-    <h2>Projects</h2>
-    <p>• ReTrace OSINT<br>• Auralink AI<br>• Vynex Tools</p>
-    <button onclick="closeModal('projects')">Close</button>
-  </div>
-</div>
-
 <script>
-const chatBox = document.getElementById('chat-box');
-const input = document.getElementById('user-input');
-const typing = document.getElementById('typing');
-
-async function sendMessage() {
-  const text = input.value.trim();
-  if (!text) return;
-  appendMessage(text, 'user');
-  input.value = '';
-  showTyping(true);
-
-  const res = await fetch('/chat', {
-    method: 'POST',
-    headers: {'Content-Type':'application/json'},
-    body: JSON.stringify({ message: text })
-  });
-
+async function loadHistory(){
+  const res = await fetch('/history');
   const data = await res.json();
-  showTyping(false);
-  typeWriter(data.reply, 'ai');
+  data.forEach(m=>appendMessage(m.content, m.role));
 }
-
-function appendMessage(text, sender) {
+function appendMessage(text, role){
   const div = document.createElement('div');
-  div.className = 'msg ' + sender;
+  div.className = 'msg '+role;
   div.textContent = text;
-  chatBox.appendChild(div);
-  chatBox.scrollTop = chatBox.scrollHeight;
+  document.getElementById('messages').appendChild(div);
+  div.scrollIntoView();
 }
-
-function showTyping(state) {
-  typing.style.display = state ? 'block' : 'none';
-  chatBox.scrollTop = chatBox.scrollHeight;
+async function sendMessage(){
+  const input = document.getElementById('user-input');
+  const text = input.value.trim();
+  if(!text) return;
+  appendMessage(text,'user');
+  input.value='';
+  const res = await fetch('/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text})});
+  const data = await res.json();
+  appendMessage(data.reply,'ai');
 }
-
-function typeWriter(text, sender) {
-  const div = document.createElement('div');
-  div.className = 'msg ' + sender;
-  chatBox.appendChild(div);
-  let i = 0;
-  const interval = setInterval(() => {
-    div.textContent = text.substring(0, i++);
-    chatBox.scrollTop = chatBox.scrollHeight;
-    if (i > text.length) clearInterval(interval);
-  }, 15);
-}
-
-function openModal(name) {
-  document.getElementById(name+'-modal').style.display = 'flex';
-}
-function closeModal(name) {
-  document.getElementById(name+'-modal').style.display = 'none';
-}
+loadHistory();
 </script>
 </body>
 </html>
 """
 
+# === ROUTES ===
 @app.route("/")
-def home():
-    return render_template_string(HTML_PAGE)
+def root():
+    if "user_id" not in session:
+        return redirect(url_for('login'))
+    return render_template_string(CHAT_PAGE, username=session.get("username"))
+
+@app.route("/register", methods=["GET", "POST"])
+def register():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = bcrypt.generate_password_hash(request.form["password"]).decode("utf-8")
+        if User.query.filter_by(username=username).first():
+            return "Username already taken."
+        user = User(username=username, password=password)
+        db.session.add(user)
+        db.session.commit()
+        return redirect(url_for('login'))
+    return REGISTER_PAGE
+
+@app.route("/login", methods=["GET", "POST"])
+def login():
+    if request.method == "POST":
+        username = request.form["username"]
+        password = request.form["password"]
+        user = User.query.filter_by(username=username).first()
+        if user and bcrypt.check_password_hash(user.password, password):
+            session["user_id"] = user.id
+            session["username"] = user.username
+            return redirect(url_for('root'))
+        return "Invalid credentials."
+    return LOGIN_PAGE
+
+@app.route("/logout")
+def logout():
+    session.clear()
+    return redirect(url_for('login'))
 
 @app.route("/chat", methods=["POST"])
 def chat():
-    user_message = request.json.get("message", "")
-    syrix_memory.append({"role": "user", "content": user_message})
-    conversation = [{"role": "system", "content": SYRIX_SYSTEM_PROMPT}] + syrix_memory[-10:]
+    if "user_id" not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    user_id = session["user_id"]
+    msg = request.json.get("message", "")
 
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=conversation
-    )
+    history = [{"role": "system", "content": SYSTEM_PROMPT}]
+    messages = Message.query.filter_by(user_id=user_id).order_by(Message.id.desc()).limit(10).all()
+    for m in reversed(messages):
+        history.append({"role": m.role, "content": m.content})
+    history.append({"role": "user", "content": msg})
+
+    response = client.chat.completions.create(model="gpt-4o-mini", messages=history)
     reply = response.choices[0].message.content
-    syrix_memory.append({"role": "assistant", "content": reply})
+
+    db.session.add(Message(user_id=user_id, role="user", content=msg))
+    db.session.add(Message(user_id=user_id, role="assistant", content=reply))
+    db.session.commit()
+
     return jsonify({"reply": reply})
 
+@app.route("/history")
+def history():
+    if "user_id" not in session:
+        return jsonify([])
+    user_id = session["user_id"]
+    messages = Message.query.filter_by(user_id=user_id).order_by(Message.id).all()
+    return jsonify([{"role": m.role, "content": m.content} for m in messages])
+
+# === RENDER START ===
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
